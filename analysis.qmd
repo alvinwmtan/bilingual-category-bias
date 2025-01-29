@@ -23,6 +23,7 @@ library(wordbankr)
 library(knitr)
 library(MatchIt)
 library(cobalt)
+library(patchwork)
 set.seed(42)
 ```
 
@@ -38,6 +39,24 @@ source("scripts/plots.R")
 INTERMEDIATE_LOC <- here("intermediates")
 if (!dir.exists(INTERMEDIATE_LOC)) dir.create(INTERMEDIATE_LOC)
 ```
+
+# Schematic
+```{r}
+schematic_df <- expand_grid(
+  prop_total = pts,
+  lex_cat = c("over-represented", "no bias", "under-represented")
+) |> 
+  mutate(prop_class = case_when(
+    lex_cat == "over-represented" ~ (prop_total - 1) ^ 3 + 1,
+    lex_cat == "under-represented" ~ prop_total ^ 3,
+    lex_cat == "no bias" ~ prop_total
+  ),
+  lex_cat = factor(lex_cat, levels = c("over-represented", "no bias", "under-represented")))
+make_prop_plot(NULL, schematic_df, NULL) +
+  scale_color_manual(values = c("#c4c4c4", "#808080", "#363636")) +
+  labs(col = "Syntactic category bias")
+```
+
 
 # Analysis 1: Malaysian data
 
@@ -153,7 +172,7 @@ Our default analysis is production, which we do here.
 ## Run models
 ```{r}
 my_matched_models <- my_matched_cleaned |> 
-  nest(data = -c(language, lex_class, lang_group)) |> 
+  nest(data = -c(language, lex_cat, lang_group)) |> 
   mutate(model = map(data, ~ langcog::clm(prop_class ~ I(prop_total^3) + 
                                             I(prop_total^2) + prop_total - 1, 
                                           data = .)),
@@ -161,7 +180,7 @@ my_matched_models <- my_matched_cleaned |>
                                                          tibble(prop_total = pts))))
 
 my_matched_preds <- my_matched_models |> 
-  select(language, lex_class, lang_group, predictions) |> 
+  select(language, lex_cat, lang_group, predictions) |> 
   unnest(predictions) |> 
   rename(prop_class = .fitted)
 ```
@@ -171,9 +190,11 @@ my_matched_preds <- my_matched_models |>
 my_sampled_areas <- sample_areas(my_matched_cleaned)
 saveRDS(my_sampled_areas, here(INTERMEDIATE_LOC, "my_sampled_areas.rds"))
 
+# note: this "mean" is the mean over bootstrap samples;
+# in the paper itself we report observed areas instead of bootstrapped means
 my_sampled_summary <- my_sampled_areas |> 
   filter(!is.na(area)) |> 
-  group_by(language, lang_group, lex_class) |> 
+  group_by(language, lang_group, lex_cat) |> 
   summarise(mean = mean(area),
             ci_lower = langcog::ci_lower(area),
             ci_upper = langcog::ci_upper(area))
@@ -194,7 +215,7 @@ my_bias_plot
 ## Permutation testing
 ```{r}
 my_observed_areas <- my_matched_cleaned |> 
-  nest(data = -c(language, lex_class, lang_group)) |> 
+  nest(data = -c(language, lex_cat, lang_group)) |> 
   mutate(area = map_dbl(data, poly_area)) |> 
   select(-data)
 
@@ -231,10 +252,10 @@ my_permuted_areas_diff <- my_permuted_areas_wide |>
 ```{r}
 my_perm_test <- my_permuted_areas_diff |> 
   left_join(my_observed_areas_diff, 
-            by = c("language", "lex_class", "comparison"),
+            by = c("language", "lex_cat", "comparison"),
             suffix = c("_perm", "_obs")) |> 
   mutate(obs_beats_perm = abs(area_diff_perm) - abs(area_diff_obs) > 0) |> 
-  group_by(language, lex_class, comparison) |> 
+  group_by(language, lex_cat, comparison) |> 
   summarise(obs_p = sum(obs_beats_perm, na.rm = TRUE) / n(),
             .groups = "drop") |> 
   filter(!(language == "Malay" & comparison == "engcmn_minus_mon"),
@@ -277,10 +298,10 @@ my_permuted_areas_diff_within <- my_permuted_areas_wide_within |>
 ```{r}
 my_perm_test_within <- my_permuted_areas_diff_within |> 
   left_join(my_observed_areas_diff_within, 
-            by = c("lang_group", "lex_class", "comparison"),
+            by = c("lang_group", "lex_cat", "comparison"),
             suffix = c("_perm", "_obs")) |> 
   mutate(obs_beats_perm = abs(area_diff_perm) - abs(area_diff_obs) > 0) |> 
-  group_by(lang_group, lex_class, comparison) |> 
+  group_by(lang_group, lex_cat, comparison) |> 
   summarise(obs_p = sum(obs_beats_perm, na.rm = TRUE) / n(),
             .groups = "drop") |> 
   filter(lang_group == comparison) |> 
@@ -300,7 +321,7 @@ my_matched_comp <- my_matched_cleaned |>
          prop_total = sum(understands, na.rm = T) / sum(n, na.rm = T))
 
 my_matched_comp_models <- my_matched_comp |> 
-  nest(data = -c(language, lex_class, lang_group)) |> 
+  nest(data = -c(language, lex_cat, lang_group)) |> 
   mutate(model = map(data, ~ langcog::clm(prop_class ~ I(prop_total^3) + 
                                             I(prop_total^2) + prop_total - 1, 
                                           data = .)),
@@ -308,7 +329,7 @@ my_matched_comp_models <- my_matched_comp |>
                                                          tibble(prop_total = pts))))
 
 my_matched_comp_preds <- my_matched_comp_models |> 
-  select(language, lex_class, lang_group, predictions) |> 
+  select(language, lex_cat, lang_group, predictions) |> 
   unnest(predictions) |> 
   rename(prop_class = .fitted)
 ```
@@ -320,7 +341,7 @@ saveRDS(my_sampled_areas_comp, here(INTERMEDIATE_LOC, "my_sampled_areas_comp.rds
 
 my_sampled_summary_comp <- my_sampled_areas_comp |> 
   filter(!is.na(area)) |> 
-  group_by(language, lang_group, lex_class) |> 
+  group_by(language, lang_group, lex_cat) |> 
   summarise(mean = mean(area),
             ci_lower = langcog::ci_lower(area),
             ci_upper = langcog::ci_upper(area),
@@ -342,7 +363,7 @@ my_bias_plot_comp
 ## Permutation testing
 ```{r}
 my_observed_areas_comp <- my_matched_comp |> 
-  nest(data = -c(language, lex_class, lang_group)) |> 
+  nest(data = -c(language, lex_cat, lang_group)) |> 
   mutate(area = map_dbl(data, poly_area)) |> 
   select(-data)
 
@@ -379,10 +400,10 @@ my_permuted_areas_comp_diff <- my_permuted_areas_comp_wide |>
 ```{r}
 my_perm_test_comp <- my_permuted_areas_comp_diff |> 
   left_join(my_observed_areas_comp_diff, 
-            by = c("language", "lex_class", "comparison"),
+            by = c("language", "lex_cat", "comparison"),
             suffix = c("_perm", "_obs")) |> 
   mutate(obs_beats_perm = abs(area_diff_perm) - abs(area_diff_obs) > 0) |> 
-  group_by(language, lex_class, comparison) |> 
+  group_by(language, lex_cat, comparison) |> 
   summarise(obs_p = sum(obs_beats_perm, na.rm = TRUE) / n(),
             .groups = "drop") |> 
   filter(!(language == "Malay" & comparison == "engcmn_minus_mon"),
@@ -391,6 +412,115 @@ my_perm_test_comp <- my_permuted_areas_comp_diff |>
   arrange(comparison) |> 
   mutate(obs_p_adj = p.adjust(obs_p, "BH"))
 my_perm_test_comp
+```
+
+# Analysis 1c: Malaysia without matching
+Trying without matching
+```{r}
+my_full_cleaned <- my_lex_class |> 
+  filter(prop_total != 0,
+         !(lang_group_fine %in% c("mon-cmn", "mon-msa") & language == "English"),
+         !(lang_group_fine %in% c("mon-eng", "mon-msa") & language == "Mandarin"),
+         !(lang_group_fine %in% c("mon-eng", "mon-cmn") & language == "Malay"),
+         !(lang_group == "eng-cmn" & language == "Malay"),
+         !(lang_group == "eng-msa" & language == "Mandarin"),
+         !(lang_group_fine %in% c("msa-cmn", "tri")))
+saveRDS(my_full_cleaned, here(INTERMEDIATE_LOC, "my_full_cleaned.rds"))
+```
+
+## Run models
+```{r}
+my_full_models <- my_full_cleaned |> 
+  nest(data = -c(language, lex_cat, lang_group)) |> 
+  mutate(model = map(data, ~ langcog::clm(prop_class ~ I(prop_total^3) + 
+                                            I(prop_total^2) + prop_total - 1, 
+                                          data = .)),
+         predictions = map(model, ~ broom:::augment.lm(., newdata = 
+                                                         tibble(prop_total = pts))))
+
+my_full_preds <- my_full_models |> 
+  select(language, lex_cat, lang_group, predictions) |> 
+  unnest(predictions) |> 
+  rename(prop_class = .fitted)
+```
+
+## Bootstrapping
+```{r}
+my_full_sampled_areas <- sample_areas(my_full_cleaned)
+saveRDS(my_full_sampled_areas, here(INTERMEDIATE_LOC, "my_full_sampled_areas.rds"))
+
+my_full_sampled_summary <- my_full_sampled_areas |> 
+  filter(!is.na(area)) |> 
+  group_by(language, lang_group, lex_cat) |> 
+  summarise(mean = mean(area),
+            ci_lower = langcog::ci_lower(area),
+            ci_upper = langcog::ci_upper(area))
+```
+
+## Plots
+```{r}
+my_full_prop_plot <- make_prop_plot(my_full_cleaned, my_full_preds)
+my_full_prop_plot
+```
+
+```{r}
+my_full_bias_plot <- make_bias_plot(my_full_sampled_summary) +
+  scale_colour_manual(values = c("#A9CD66", "#66CDB2", "#B766CD"))
+my_full_bias_plot
+```
+
+## Permutation testing
+```{r}
+my_full_observed_areas <- my_full_cleaned |> 
+  nest(data = -c(language, lex_cat, lang_group)) |> 
+  mutate(area = map_dbl(data, poly_area)) |> 
+  select(-data)
+
+my_full_observed_areas_wide <- my_full_observed_areas |> 
+  pivot_wider(names_from = lang_group,
+              values_from = area) |> 
+  mutate(engmsa_minus_mon = `eng-msa` - mon,
+         engcmn_minus_mon = `eng-cmn` - mon,
+         engcmn_minus_engmsa = `eng-cmn` - `eng-msa`)
+
+my_full_observed_areas_diff <- my_full_observed_areas_wide |> 
+  select(-`eng-msa`, -`eng-cmn`, -mon) |> 
+  pivot_longer(cols = c("engmsa_minus_mon", "engcmn_minus_mon", "engcmn_minus_engmsa"), 
+               names_to = "comparison", 
+               values_to = "area_diff")
+
+my_full_permuted_areas <- permute_areas(my_full_cleaned)
+saveRDS(my_full_permuted_areas, here(INTERMEDIATE_LOC, "my_full_permuted_areas.rds"))
+
+my_full_permuted_areas_wide <- my_full_permuted_areas |> 
+  pivot_wider(names_from = lang_group,
+              values_from = area) |> 
+  mutate(engmsa_minus_mon = `eng-msa` - mon,
+         engcmn_minus_mon = `eng-cmn` - mon,
+         engcmn_minus_engmsa = `eng-cmn` - `eng-msa`)
+
+my_full_permuted_areas_diff <- my_full_permuted_areas_wide |> 
+  select(-`eng-msa`, -`eng-cmn`, -mon) |> 
+  pivot_longer(cols = c("engmsa_minus_mon", "engcmn_minus_mon", "engcmn_minus_engmsa"), 
+               names_to = "comparison", 
+               values_to = "area_diff")
+```
+
+```{r}
+my_full_perm_test <- my_full_permuted_areas_diff |> 
+  left_join(my_full_observed_areas_diff, 
+            by = c("language", "lex_cat", "comparison"),
+            suffix = c("_perm", "_obs")) |> 
+  mutate(obs_beats_perm = abs(area_diff_perm) - abs(area_diff_obs) > 0) |> 
+  group_by(language, lex_cat, comparison) |> 
+  summarise(obs_p = sum(obs_beats_perm, na.rm = TRUE) / n(),
+            .groups = "drop") |> 
+  filter(!(language == "Malay" & comparison == "engcmn_minus_mon"),
+         !(language == "Mandarin" & comparison == "engmsa_minus_mon"),
+         !(language != "English" & comparison == "engcmn_minus_engmsa")) |> 
+  arrange(comparison) |> 
+  mutate(obs_p_adj = p.adjust(obs_p, "BH"))
+my_full_perm_test
 ```
 
 # Analysis 2: Oxford data
@@ -444,7 +574,7 @@ ox_dat_es_matched <- match.data(ox_demog_es_matched)
 
 # (4) eng: gb
 ox_demog_en <- ox_demog |> filter(lang_group == "moneng" & 
-              !other_lang %in% c("Germany", "Netherlands", "Spain"))
+                                    !other_lang %in% c("Germany", "Netherlands", "Spain"))
 
 # bind all selected participants
 ox_demog_matched <- bind_rows(list(ox_dat_de_matched, ox_dat_nd_matched, 
@@ -501,7 +631,7 @@ saveRDS(ox_matched_cleaned, here(INTERMEDIATE_LOC, "ox_matched_cleaned.rds"))
 ## Run models
 ```{r}
 ox_matched_models <- ox_matched_cleaned |> 
-  nest(data = -c(language, lex_class, lang_group)) |> 
+  nest(data = -c(language, lex_cat, lang_group)) |> 
   mutate(model = map(data, ~ langcog::clm(prop_class ~ I(prop_total^3) + 
                                             I(prop_total^2) + prop_total - 1, 
                                           data = .)),
@@ -509,7 +639,7 @@ ox_matched_models <- ox_matched_cleaned |>
                                                          tibble(prop_total = pts))))
 
 ox_matched_preds <- ox_matched_models |> 
-  select(language, lex_class, lang_group, predictions) |> 
+  select(language, lex_cat, lang_group, predictions) |> 
   unnest(predictions) |> 
   rename(prop_class = .fitted)
 ```
@@ -521,7 +651,7 @@ saveRDS(ox_sampled_areas, here(INTERMEDIATE_LOC, "ox_sampled_areas.rds"))
 
 ox_sampled_summary <- ox_sampled_areas |> 
   filter(!is.na(area)) |> 
-  group_by(language, lang_group, lex_class) |> 
+  group_by(language, lang_group, lex_cat) |> 
   summarise(mean = mean(area),
             ci_lower = langcog::ci_lower(area),
             ci_upper = langcog::ci_upper(area),
@@ -568,7 +698,43 @@ ox_bias_plot <- make_bias_plot(ox_sampled_summary |>
                                shape_opt = Country) +
   scale_shape_manual(values = c(1, 16), 
                      guide = guide_legend(reverse = TRUE))
+ox_bias_plot
 ```
+
+Second try, splitting English and other languages
+```{r}
+ox_bias_data <- ox_sampled_summary |> 
+  mutate(Country = ifelse(str_sub(lang_group, 5, 6) == "gb",
+                          "UK", "EU") |> 
+           fct_relevel("UK", "EU") |> fct_rev(),
+         lang_group = str_sub(lang_group, 1, 3),
+         lang_group = case_when(
+           lang_group == "eng" ~ "mon",
+           lang_group == "nld" ~ "eng-nld",
+           lang_group == "deu" ~ "eng-deu",
+           lang_group == "esp" ~ "eng-spa"
+         ) |> 
+           fct_relevel(c("mon", "eng-nld", 
+                         "eng-deu", "eng-spa")) |> 
+           fct_rev())
+ox_bias_eng <- make_bias_plot(ox_bias_data |> filter(language == "English"),
+                              shape_opt = Country) +
+  scale_color_brewer(type = "qual", palette = "Set2") +
+  scale_shape_manual(values = c(15, 16), 
+                     guide = guide_legend(reverse = TRUE)) +
+  theme(strip.background = element_blank(),
+        strip.text = element_blank())
+ox_bias_oth <- make_bias_plot(ox_bias_data |> filter(language != "English"),
+                              shape_opt = Country) +
+  scale_color_brewer(type = "qual", palette = "Set2") +
+  scale_shape_manual(values = c(15, 16), 
+                     guide = guide_legend(reverse = TRUE)) +
+  theme(legend.position = "none")
+
+ox_bias_twocol <- (ox_bias_eng | ox_bias_oth) + 
+  plot_layout(axes = "collect", guides = "collect")
+```
+
 
 ## Permutation testing
 
@@ -577,7 +743,7 @@ Because of the weird way we set up the lang_groups, we do this first for English
 English
 ```{r}
 ox_observed_areas <- ox_matched_cleaned |> 
-  nest(data = -c(language, lex_class, lang_group)) |> 
+  nest(data = -c(language, lex_cat, lang_group)) |> 
   mutate(area = map_dbl(data, poly_area)) |> 
   select(-data)
 
@@ -588,10 +754,10 @@ ox_observed_areas_wide_eng <- ox_observed_areas |>
   mutate(engdeu_de_vs_gb = Germany - German,
          engnld_nd_vs_gb = Netherlands - Dutch,
          engspa_es_vs_gb = Spain - Spanish,
-         across(-c("lex_class", "language"), \(x) {x - English}))
+         across(-c("lex_cat", "language"), \(x) {x - English}))
 
 ox_observed_areas_diff_eng <- ox_observed_areas_wide_eng |> 
-  pivot_longer(cols = -c("lex_class", "language"), 
+  pivot_longer(cols = -c("lex_cat", "language"), 
                names_to = "comparison", 
                values_to = "area_diff")
 
@@ -606,10 +772,10 @@ ox_permuted_areas_wide_eng <- ox_permuted_areas_eng |>
   mutate(engdeu_de_vs_gb = Germany - German,
          engnld_nd_vs_gb = Netherlands - Dutch,
          engspa_es_vs_gb = Spain - Spanish,
-         across(-c("lex_class", "language", "sample"), \(x) {x - English}))
+         across(-c("lex_cat", "language", "sample"), \(x) {x - English}))
 
 ox_permuted_areas_diff_eng <- ox_permuted_areas_wide_eng |> 
-  pivot_longer(cols = -c("lex_class", "language", "sample"), 
+  pivot_longer(cols = -c("lex_cat", "language", "sample"), 
                names_to = "comparison", 
                values_to = "area_diff")
 ```
@@ -617,10 +783,10 @@ ox_permuted_areas_diff_eng <- ox_permuted_areas_wide_eng |>
 ```{r}
 ox_perm_test_eng <- ox_permuted_areas_diff_eng |> 
   left_join(ox_observed_areas_diff_eng, 
-            by = c("language", "lex_class", "comparison"),
+            by = c("language", "lex_cat", "comparison"),
             suffix = c("_perm", "_obs")) |> 
   mutate(obs_beats_perm = abs(area_diff_perm) - abs(area_diff_obs) > 0) |> 
-  group_by(language, lex_class, comparison) |> 
+  group_by(language, lex_cat, comparison) |> 
   summarise(obs_p = sum(obs_beats_perm, na.rm = TRUE) / n(),
             .groups = "drop") |> 
   filter(comparison != "English") |> 
@@ -642,10 +808,10 @@ ox_observed_areas_wide_oth <- ox_observed_areas |>
   filter(language %in% c("German", "Dutch", "Spanish")) |> 
   pivot_wider(names_from = lang_group,
               values_from = area) |> 
-  mutate(across(-c("lex_class", "language"), \(x) {x - UK}))
+  mutate(across(-c("lex_cat", "language"), \(x) {x - UK}))
 
 ox_observed_areas_diff_oth <- ox_observed_areas_wide_oth |> 
-  pivot_longer(cols = -c("lex_class", "language"), 
+  pivot_longer(cols = -c("lex_cat", "language"), 
                names_to = "comparison", 
                values_to = "area_diff") |> 
   filter(!is.na(area_diff), comparison != "UK")
@@ -677,10 +843,10 @@ ox_permuted_areas_wide_oth <- ox_permuted_areas_oth |>
   filter(!is.na(area)) |> 
   pivot_wider(names_from = lang_group,
               values_from = area) |> 
-  mutate(across(-c("lex_class", "language", "sample"), \(x) {x - UK}))
+  mutate(across(-c("lex_cat", "language", "sample"), \(x) {x - UK}))
 
 ox_permuted_areas_diff_oth <- ox_permuted_areas_wide_oth |> 
-  pivot_longer(cols = -c("lex_class", "language", "sample"), 
+  pivot_longer(cols = -c("lex_cat", "language", "sample"), 
                names_to = "comparison", 
                values_to = "area_diff") |> 
   filter(!is.na(area_diff), comparison != "UK")
@@ -689,10 +855,10 @@ ox_permuted_areas_diff_oth <- ox_permuted_areas_wide_oth |>
 ```{r}
 ox_perm_test_oth <- ox_permuted_areas_diff_oth |> 
   left_join(ox_observed_areas_diff_oth, 
-            by = c("language", "lex_class", "comparison"),
+            by = c("language", "lex_cat", "comparison"),
             suffix = c("_perm", "_obs")) |> 
   mutate(obs_beats_perm = abs(area_diff_perm) - abs(area_diff_obs) > 0) |> 
-  group_by(language, lex_class, comparison) |> 
+  group_by(language, lex_cat, comparison) |> 
   summarise(obs_p = sum(obs_beats_perm, na.rm = TRUE) / n(),
             .groups = "drop") |> 
   filter(comparison != "UK") |> 
@@ -707,6 +873,230 @@ ox_perm_test_full <- bind_rows(ox_perm_test_eng, ox_perm_test_oth) |>
 ox_perm_test_full
 ```
 
+# Analysis 2b: Oxford without matching
+```{r}
+ox_full_cleaned <- ox_lex_class |> 
+  filter((lang_group == "eng-l2" &
+            other_lang %in% c("Germany", "German",
+                              "Netherlands", "Dutch",
+                              "Spanish", "Spain")) |
+           (lang_group == "moneng" & 
+              !other_lang %in% c("Germany", "Netherlands", "Spain"))) |> 
+  filter(prop_total != 0,
+         lang_group %in% c("moneng", "eng-l2"),
+         !(lang_group == "moneng" & language != "English")) |> 
+  mutate(lang_group = ifelse(lang_group == "moneng", "English", other_lang)) |> 
+  ungroup()
+saveRDS(ox_full_cleaned, here(INTERMEDIATE_LOC, "ox_full_cleaned.rds"))
+```
+
+## Run models
+```{r}
+ox_full_models <- ox_full_cleaned |> 
+  nest(data = -c(language, lex_cat, lang_group)) |> 
+  mutate(model = map(data, ~ langcog::clm(prop_class ~ I(prop_total^3) + 
+                                            I(prop_total^2) + prop_total - 1, 
+                                          data = .)),
+         predictions = map(model, ~ broom:::augment.lm(., newdata = 
+                                                         tibble(prop_total = pts))))
+
+ox_full_preds <- ox_full_models |> 
+  select(language, lex_cat, lang_group, predictions) |> 
+  unnest(predictions) |> 
+  rename(prop_class = .fitted)
+```
+
+## Bootstrapping
+```{r}
+ox_full_sampled_areas <- sample_areas(ox_full_cleaned)
+saveRDS(ox_full_sampled_areas, here(INTERMEDIATE_LOC, "ox_full_sampled_areas.rds"))
+
+ox_full_sampled_summary <- ox_full_sampled_areas |> 
+  filter(!is.na(area)) |> 
+  group_by(language, lang_group, lex_cat) |> 
+  summarise(mean = mean(area),
+            ci_lower = langcog::ci_lower(area),
+            ci_upper = langcog::ci_upper(area),
+            .groups = "drop") |> 
+  mutate(language = case_when(
+    language == "Germany" ~ "German",
+    language == "Netherlands" ~ "Dutch",
+    language == "Spain" ~ "Spanish",
+    .default = language
+  ) |> fct_relevel(c("English", "Dutch", "German", "Spanish")) |> fct_rev(),
+  lang_group = lang_group |> 
+    fct_relevel(c("English", "Dutch", "Netherlands",
+                  "German", "Germany", "Spanish", "Spain")) |> 
+    fct_recode(`eng-gb` = "English", `nld-gb` = "Dutch", `nld-nd` = "Netherlands",
+               `deu-gb` = "German", `deu-de` = "Germany", 
+               `esp-gb` = "Spanish", `esp-sp` = "Spain"))
+```
+
+## Plots
+```{r}
+ox_full_prop_plot <- make_prop_plot(ox_full_cleaned, ox_full_preds,
+                                    faceting = factor(language == "English") |> 
+                                      fct_recode(English = "TRUE", Other = "FALSE") |> 
+                                      fct_relevel("English") ~ 
+                                      factor(lang_group) |> fct_relevel("English"))
+ox_full_prop_plot
+```
+
+```{r}
+ox_full_bias_plot <- make_bias_plot(ox_full_sampled_summary |> 
+                                      mutate(Country = ifelse(str_sub(lang_group, 5, 6) == "gb",
+                                                              "UK", "EU") |> 
+                                               fct_relevel("UK", "EU") |> fct_rev(),
+                                             lang_group = str_sub(lang_group, 1, 3),
+                                             lang_group = case_when(
+                                               lang_group == "eng" ~ "mon",
+                                               lang_group == "nld" ~ "eng-nld",
+                                               lang_group == "deu" ~ "eng-deu",
+                                               lang_group == "esp" ~ "eng-spa"
+                                             ) |> 
+                                               fct_relevel(c("mon", "eng-nld", 
+                                                             "eng-deu", "eng-spa")) |> 
+                                               fct_rev()),
+                                    shape_opt = Country) +
+  scale_shape_manual(values = c(1, 16), 
+                     guide = guide_legend(reverse = TRUE))
+ox_full_bias_plot
+```
+
+## Permutation testing
+
+English
+```{r}
+ox_full_observed_areas <- ox_full_cleaned |> 
+  nest(data = -c(language, lex_cat, lang_group)) |> 
+  mutate(area = map_dbl(data, poly_area)) |> 
+  select(-data)
+
+ox_full_observed_areas_wide_eng <- ox_full_observed_areas |> 
+  filter(language == "English") |> 
+  pivot_wider(names_from = lang_group,
+              values_from = area) |> 
+  mutate(engdeu_de_vs_gb = Germany - German,
+         engnld_nd_vs_gb = Netherlands - Dutch,
+         engspa_es_vs_gb = Spain - Spanish,
+         across(-c("lex_cat", "language"), \(x) {x - English}))
+
+ox_full_observed_areas_diff_eng <- ox_full_observed_areas_wide_eng |> 
+  pivot_longer(cols = -c("lex_cat", "language"), 
+               names_to = "comparison", 
+               values_to = "area_diff")
+
+ox_full_permuted_areas_eng <- permute_areas(ox_full_cleaned |> 
+                                              filter(language == "English"))
+saveRDS(ox_full_permuted_areas_eng, here(INTERMEDIATE_LOC, "ox_full_permuted_areas_eng.rds"))
+
+ox_full_permuted_areas_wide_eng <- ox_full_permuted_areas_eng |> 
+  filter(language == "English") |> 
+  pivot_wider(names_from = lang_group,
+              values_from = area) |> 
+  mutate(engdeu_de_vs_gb = Germany - German,
+         engnld_nd_vs_gb = Netherlands - Dutch,
+         engspa_es_vs_gb = Spain - Spanish,
+         across(-c("lex_cat", "language", "sample"), \(x) {x - English}))
+
+ox_full_permuted_areas_diff_eng <- ox_full_permuted_areas_wide_eng |> 
+  pivot_longer(cols = -c("lex_cat", "language", "sample"), 
+               names_to = "comparison", 
+               values_to = "area_diff")
+```
+
+```{r}
+ox_full_perm_test_eng <- ox_full_permuted_areas_diff_eng |> 
+  left_join(ox_full_observed_areas_diff_eng, 
+            by = c("language", "lex_cat", "comparison"),
+            suffix = c("_perm", "_obs")) |> 
+  mutate(obs_beats_perm = abs(area_diff_perm) - abs(area_diff_obs) > 0) |> 
+  group_by(language, lex_cat, comparison) |> 
+  summarise(obs_p = sum(obs_beats_perm, na.rm = TRUE) / n(),
+            .groups = "drop") |> 
+  filter(comparison != "English") |> 
+  arrange(comparison) |> 
+  mutate(obs_p_adj = p.adjust(obs_p, "BH"))
+ox_full_perm_test_eng
+```
+
+Other languages
+```{r}
+ox_full_observed_areas_wide_oth <- ox_full_observed_areas |> 
+  mutate(language = case_when(
+    language == "Germany" ~ "German",
+    language == "Netherlands" ~ "Dutch",
+    language == "Spain" ~ "Spanish",
+    .default = language
+  ) |> fct_relevel(c("English", "Dutch", "German", "Spanish")) |> fct_rev(),
+  lang_group = ifelse(lang_group %in% c("German", "Dutch", "Spanish"), "UK", lang_group)) |> 
+  filter(language %in% c("German", "Dutch", "Spanish")) |> 
+  pivot_wider(names_from = lang_group,
+              values_from = area) |> 
+  mutate(across(-c("lex_cat", "language"), \(x) {x - UK}))
+
+ox_full_observed_areas_diff_oth <- ox_full_observed_areas_wide_oth |> 
+  pivot_longer(cols = -c("lex_cat", "language"), 
+               names_to = "comparison", 
+               values_to = "area_diff") |> 
+  filter(!is.na(area_diff), comparison != "UK")
+
+ox_full_permuted_areas_oth <- permute_areas(
+  ox_full_cleaned |> 
+    filter(lang_group == language &
+             language %in% c("German", "Dutch", "Spanish",
+                             "Germany", "Netherlands", "Spain")) |> 
+    mutate(other_lang = case_when(
+      other_lang == "Germany" ~ "German",
+      other_lang == "Netherlands" ~ "Dutch",
+      other_lang == "Spain" ~ "Spanish",
+      .default = other_lang
+    ),
+    language = case_when(
+      language == "Germany" ~ "German",
+      language == "Netherlands" ~ "Dutch",
+      language == "Spain" ~ "Spanish",
+      .default = language
+    )),
+  group = "other_lang") |> 
+  ungroup()
+saveRDS(ox_full_permuted_areas_oth, here(INTERMEDIATE_LOC, "ox_full_permuted_areas_oth.rds"))
+
+ox_full_permuted_areas_wide_oth <- ox_full_permuted_areas_oth |> 
+  # filter(language %in% c("German", "Dutch", "Spanish")) |> 
+  mutate(lang_group = ifelse(language == lang_group, "UK", lang_group)) |> 
+  filter(!is.na(area)) |> 
+  pivot_wider(names_from = lang_group,
+              values_from = area) |> 
+  mutate(across(-c("lex_cat", "language", "sample"), \(x) {x - UK}))
+
+ox_full_permuted_areas_diff_oth <- ox_full_permuted_areas_wide_oth |> 
+  pivot_longer(cols = -c("lex_cat", "language", "sample"), 
+               names_to = "comparison", 
+               values_to = "area_diff") |> 
+  filter(!is.na(area_diff), comparison != "UK")
+```
+
+```{r}
+ox_full_perm_test_oth <- ox_full_permuted_areas_diff_oth |> 
+  left_join(ox_full_observed_areas_diff_oth, 
+            by = c("language", "lex_cat", "comparison"),
+            suffix = c("_perm", "_obs")) |> 
+  mutate(obs_beats_perm = abs(area_diff_perm) - abs(area_diff_obs) > 0) |> 
+  group_by(language, lex_cat, comparison) |> 
+  summarise(obs_p = sum(obs_beats_perm, na.rm = TRUE) / n(),
+            .groups = "drop") |> 
+  filter(comparison != "UK") |> 
+  arrange(comparison) |> 
+  mutate(obs_p_adj = p.adjust(obs_p, "BH"))
+ox_full_perm_test_oth
+```
+
+```{r}
+ox_full_perm_test_full <- bind_rows(ox_full_perm_test_eng, ox_full_perm_test_oth) |> 
+  mutate(obs_p_adj = p.adjust(obs_p, "BH"))
+ox_full_perm_test_full
+```
 
 # Analysis 3a: Eng-Spa data
 We had to collapse across language exposure because of limited sample size in the previous analyses. But we suspect that it would affect bias---perhaps if there is cross-linguistic influence you would see it most with participants with more exposure to the other language. 
@@ -770,7 +1160,7 @@ bal.tab(lang_group ~ age + sex,
 ## Run models
 ```{r}
 us_matched_models <- us_matched_cleaned |> 
-  nest(data = -c(language, lex_class, lang_group)) |> 
+  nest(data = -c(language, lex_cat, lang_group)) |> 
   mutate(model = map(data, ~ langcog::clm(prop_class ~ I(prop_total^3) + 
                                             I(prop_total^2) + prop_total - 1, 
                                           data = .)),
@@ -778,7 +1168,7 @@ us_matched_models <- us_matched_cleaned |>
                                                          tibble(prop_total = pts))))
 
 us_matched_preds <- us_matched_models |> 
-  select(language, lex_class, lang_group, predictions) |> 
+  select(language, lex_cat, lang_group, predictions) |> 
   unnest(predictions) |> 
   rename(prop_class = .fitted)
 ```
@@ -790,7 +1180,7 @@ saveRDS(us_sampled_areas, here(INTERMEDIATE_LOC, "us_sampled_areas.rds"))
 
 us_sampled_summary <- us_sampled_areas |> 
   filter(!is.na(area)) |> 
-  group_by(language, lang_group, lex_class) |> 
+  group_by(language, lang_group, lex_cat) |> 
   summarise(mean = mean(area),
             ci_lower = langcog::ci_lower(area),
             ci_upper = langcog::ci_upper(area))
@@ -811,17 +1201,17 @@ us_bias_plot
 ## Permutation testing
 ```{r}
 us_observed_areas <- us_matched_cleaned |> 
-  nest(data = -c(language, lex_class, lang_group)) |> 
+  nest(data = -c(language, lex_cat, lang_group)) |> 
   mutate(area = map_dbl(data, poly_area)) |> 
   select(-data)
 
 us_observed_areas_wide <- us_observed_areas |> 
   pivot_wider(names_from = lang_group,
               values_from = area) |> 
-  mutate(across(-c("lex_class", "language"), \(x) {x - `(80,100]`}))
+  mutate(across(-c("lex_cat", "language"), \(x) {x - `(80,100]`}))
 
 us_observed_areas_diff <- us_observed_areas_wide |> 
-  pivot_longer(cols = -c("lex_class", "language"), 
+  pivot_longer(cols = -c("lex_cat", "language"), 
                names_to = "comparison", 
                values_to = "area_diff")
 
@@ -832,10 +1222,10 @@ us_permuted_areas_wide <- us_permuted_areas |>
   pivot_wider(names_from = lang_group,
               values_from = area) |> 
   # ungroup() |> 
-  mutate(across(-c("lex_class", "language", "sample"), \(x) {x - `(80,100]`}))
+  mutate(across(-c("lex_cat", "language", "sample"), \(x) {x - `(80,100]`}))
 
 us_permuted_areas_diff <- us_permuted_areas_wide |> 
-  pivot_longer(cols = -c("lex_class", "language", "sample"), 
+  pivot_longer(cols = -c("lex_cat", "language", "sample"), 
                names_to = "comparison", 
                values_to = "area_diff")
 ```
@@ -843,10 +1233,10 @@ us_permuted_areas_diff <- us_permuted_areas_wide |>
 ```{r}
 us_perm_test <- us_permuted_areas_diff |> 
   left_join(us_observed_areas_diff, 
-            by = c("language", "lex_class", "comparison"),
+            by = c("language", "lex_cat", "comparison"),
             suffix = c("_perm", "_obs")) |> 
   mutate(obs_beats_perm = abs(area_diff_perm) - abs(area_diff_obs) > 0) |> 
-  group_by(language, lex_class, comparison) |> 
+  group_by(language, lex_cat, comparison) |> 
   summarise(obs_p = sum(obs_beats_perm, na.rm = TRUE) / n(),
             .groups = "drop") |> 
   filter(comparison != "(80,100]") |> 
@@ -873,7 +1263,7 @@ us_observed_areas_wide_within <- us_observed_areas |>
 
 us_observed_areas_diff_within <- us_observed_areas_wide_within |> 
   select(-Spanish, -English) |> 
-  pivot_longer(cols = -c("lex_class", "exp_eng"), 
+  pivot_longer(cols = -c("lex_cat", "exp_eng"), 
                names_to = "comparison", 
                values_to = "area_diff")
 ```
@@ -898,7 +1288,7 @@ us_permuted_areas_wide_within <- us_permuted_areas |>
 
 us_permuted_areas_diff_within <- us_permuted_areas_wide_within |> 
   select(-Spanish, -English) |> 
-  pivot_longer(cols = -c("lex_class", "exp_eng", "sample"), 
+  pivot_longer(cols = -c("lex_cat", "exp_eng", "sample"), 
                names_to = "comparison", 
                values_to = "area_diff")
 ```
@@ -906,19 +1296,177 @@ us_permuted_areas_diff_within <- us_permuted_areas_wide_within |>
 ```{r}
 us_perm_test_within <- us_permuted_areas_diff_within |> 
   left_join(us_observed_areas_diff_within, 
-            by = c("exp_eng", "lex_class", "comparison"),
+            by = c("exp_eng", "lex_cat", "comparison"),
             suffix = c("_perm", "_obs")) |> 
   mutate(obs_beats_perm = abs(area_diff_perm) - abs(area_diff_obs) > 0) |> 
-  group_by(exp_eng, lex_class, comparison) |> 
+  group_by(exp_eng, lex_cat, comparison) |> 
   summarise(obs_p = sum(obs_beats_perm, na.rm = TRUE) / n(),
             .groups = "drop") |> 
   arrange(comparison)
 
 us_perm_test_full <- bind_rows(us_perm_test, us_perm_test_within) |> 
   mutate(obs_p_adj = p.adjust(obs_p, "BH"))
+us_perm_test_full
 ```
 
-# Analysis 3b: Eng-Fra data
+# Analysis 3b: Eng-Spa without matching
+```{r}
+us_full_cleaned <- us_lex_class
+saveRDS(us_full_cleaned, here(INTERMEDIATE_LOC, "us_full_cleaned.rds"))
+```
+
+## Run models
+```{r}
+us_full_models <- us_full_cleaned |> 
+  nest(data = -c(language, lex_cat, lang_group)) |> 
+  mutate(model = map(data, ~ langcog::clm(prop_class ~ I(prop_total^3) + 
+                                            I(prop_total^2) + prop_total - 1, 
+                                          data = .)),
+         predictions = map(model, ~ broom:::augment.lm(., newdata = 
+                                                         tibble(prop_total = pts))))
+
+us_full_preds <- us_full_models |> 
+  select(language, lex_cat, lang_group, predictions) |> 
+  unnest(predictions) |> 
+  rename(prop_class = .fitted)
+```
+
+## Bootstrapping
+```{r}
+us_full_sampled_areas <- sample_areas(us_full_cleaned)
+saveRDS(us_full_sampled_areas, here(INTERMEDIATE_LOC, "us_full_sampled_areas.rds"))
+
+us_full_sampled_summary <- us_full_sampled_areas |> 
+  filter(!is.na(area)) |> 
+  group_by(language, lang_group, lex_cat) |> 
+  summarise(mean = mean(area),
+            ci_lower = langcog::ci_lower(area),
+            ci_upper = langcog::ci_upper(area))
+```
+
+## Plots
+```{r}
+us_full_prop_plot <- make_prop_plot(us_full_cleaned, us_full_preds)
+us_full_prop_plot
+```
+
+```{r}
+us_full_bias_plot <- make_bias_plot(us_full_sampled_summary) +
+  scale_color_viridis_d()
+us_full_bias_plot
+```
+
+## Permutation testing
+```{r}
+us_full_observed_areas <- us_full_cleaned |> 
+  nest(data = -c(language, lex_cat, lang_group)) |> 
+  mutate(area = map_dbl(data, poly_area)) |> 
+  select(-data)
+
+us_full_observed_areas_wide <- us_full_observed_areas |> 
+  pivot_wider(names_from = lang_group,
+              values_from = area) |> 
+  mutate(across(-c("lex_cat", "language"), \(x) {x - `(80,100]`}))
+
+us_full_observed_areas_diff <- us_full_observed_areas_wide |> 
+  pivot_longer(cols = -c("lex_cat", "language"), 
+               names_to = "comparison", 
+               values_to = "area_diff")
+
+us_full_permuted_areas <- permute_areas(us_full_cleaned)
+saveRDS(us_full_permuted_areas, here(INTERMEDIATE_LOC, "us_full_permuted_areas.rds"))
+
+us_full_permuted_areas_wide <- us_full_permuted_areas |> 
+  pivot_wider(names_from = lang_group,
+              values_from = area) |> 
+  # ungroup() |> 
+  mutate(across(-c("lex_cat", "language", "sample"), \(x) {x - `(80,100]`}))
+
+us_full_permuted_areas_diff <- us_full_permuted_areas_wide |> 
+  pivot_longer(cols = -c("lex_cat", "language", "sample"), 
+               names_to = "comparison", 
+               values_to = "area_diff")
+```
+
+```{r}
+us_full_perm_test <- us_full_permuted_areas_diff |> 
+  left_join(us_full_observed_areas_diff, 
+            by = c("language", "lex_cat", "comparison"),
+            suffix = c("_perm", "_obs")) |> 
+  mutate(obs_beats_perm = abs(area_diff_perm) - abs(area_diff_obs) > 0) |> 
+  group_by(language, lex_cat, comparison) |> 
+  summarise(obs_p = sum(obs_beats_perm, na.rm = TRUE) / n(),
+            .groups = "drop") |> 
+  filter(comparison != "(80,100]") |> 
+  arrange(comparison)
+```
+
+Within
+```{r}
+us_full_observed_areas_wide_within <- us_full_observed_areas |> 
+  mutate(exp_eng = ifelse(language == "English",
+                          as.character(lang_group),
+                          case_when(
+                            lang_group == "[0,20]" ~ "(80,100]",
+                            lang_group == "(20,40]" ~ "(60,80]",
+                            lang_group == "(40,60]" ~ "(40,60]",
+                            lang_group == "(60,80]" ~ "(20,40]",
+                            lang_group == "(80,100]" ~ "[0,20]",
+                          ))) |> 
+  select(-lang_group) |> 
+  pivot_wider(names_from = language,
+              values_from = area) |> 
+  # ungroup() |> 
+  mutate(spaeng = Spanish - English)
+
+us_full_observed_areas_diff_within <- us_full_observed_areas_wide_within |> 
+  select(-Spanish, -English) |> 
+  pivot_longer(cols = -c("lex_cat", "exp_eng"), 
+               names_to = "comparison", 
+               values_to = "area_diff")
+```
+
+
+```{r}
+us_full_permuted_areas_wide_within <- us_full_permuted_areas |> 
+  mutate(exp_eng = ifelse(language == "English",
+                          as.character(lang_group),
+                          case_when(
+                            lang_group == "[0,20]" ~ "(80,100]",
+                            lang_group == "(20,40]" ~ "(60,80]",
+                            lang_group == "(40,60]" ~ "(40,60]",
+                            lang_group == "(60,80]" ~ "(20,40]",
+                            lang_group == "(80,100]" ~ "[0,20]",
+                          ))) |> 
+  select(-lang_group) |> 
+  pivot_wider(names_from = language,
+              values_from = area) |> 
+  # ungroup() |> 
+  mutate(spaeng = Spanish - English)
+
+us_full_permuted_areas_diff_within <- us_full_permuted_areas_wide_within |> 
+  select(-Spanish, -English) |> 
+  pivot_longer(cols = -c("lex_cat", "exp_eng", "sample"), 
+               names_to = "comparison", 
+               values_to = "area_diff")
+```
+
+```{r}
+us_full_perm_test_within <- us_full_permuted_areas_diff_within |> 
+  left_join(us_full_observed_areas_diff_within, 
+            by = c("exp_eng", "lex_cat", "comparison"),
+            suffix = c("_perm", "_obs")) |> 
+  mutate(obs_beats_perm = abs(area_diff_perm) - abs(area_diff_obs) > 0) |> 
+  group_by(exp_eng, lex_cat, comparison) |> 
+  summarise(obs_p = sum(obs_beats_perm, na.rm = TRUE) / n(),
+            .groups = "drop") |> 
+  arrange(comparison)
+
+us_full_perm_test_full <- bind_rows(us_full_perm_test, us_full_perm_test_within) |> 
+  mutate(obs_p_adj = p.adjust(obs_p, "BH"))
+```
+
+# Analysis 3c: Eng-Fra data
 
 ```{r}
 ca_lex_class <- get_ca_data() |> rename(lang_group = exposure_bin)
@@ -979,7 +1527,7 @@ bal.tab(lang_group ~ age + sex,
 ## Run models
 ```{r}
 ca_matched_models <- ca_matched_cleaned |> 
-  nest(data = -c(language, lex_class, lang_group)) |> 
+  nest(data = -c(language, lex_cat, lang_group)) |> 
   mutate(model = map(data, ~ langcog::clm(prop_class ~ I(prop_total^3) + 
                                             I(prop_total^2) + prop_total - 1, 
                                           data = .)),
@@ -987,7 +1535,7 @@ ca_matched_models <- ca_matched_cleaned |>
                                                          tibble(prop_total = pts))))
 
 ca_matched_preds <- ca_matched_models |> 
-  select(language, lex_class, lang_group, predictions) |> 
+  select(language, lex_cat, lang_group, predictions) |> 
   unnest(predictions) |> 
   rename(prop_class = .fitted)
 ```
@@ -999,7 +1547,7 @@ saveRDS(ca_sampled_areas, here(INTERMEDIATE_LOC, "ca_sampled_areas.rds"))
 
 ca_sampled_summary <- ca_sampled_areas |> 
   filter(!is.na(area)) |> 
-  group_by(language, lang_group, lex_class) |> 
+  group_by(language, lang_group, lex_cat) |> 
   summarise(mean = mean(area),
             ci_lower = langcog::ci_lower(area),
             ci_upper = langcog::ci_upper(area))
@@ -1020,17 +1568,17 @@ ca_bias_plot
 ## Permutation testing
 ```{r}
 ca_observed_areas <- ca_matched_cleaned |> 
-  nest(data = -c(language, lex_class, lang_group)) |> 
+  nest(data = -c(language, lex_cat, lang_group)) |> 
   mutate(area = map_dbl(data, poly_area)) |> 
   select(-data)
 
 ca_observed_areas_wide <- ca_observed_areas |> 
   pivot_wider(names_from = lang_group,
               values_from = area) |> 
-  mutate(across(-c("lex_class", "language"), \(x) {x - `(80,100]`}))
+  mutate(across(-c("lex_cat", "language"), \(x) {x - `(80,100]`}))
 
 ca_observed_areas_diff <- ca_observed_areas_wide |> 
-  pivot_longer(cols = -c("lex_class", "language"), 
+  pivot_longer(cols = -c("lex_cat", "language"), 
                names_to = "comparison", 
                values_to = "area_diff")
 
@@ -1040,10 +1588,10 @@ saveRDS(ca_permuted_areas, here(INTERMEDIATE_LOC, "ca_permuted_areas.rds"))
 ca_permuted_areas_wide <- ca_permuted_areas |> 
   pivot_wider(names_from = lang_group,
               values_from = area) |> 
-  mutate(across(-c("lex_class", "language", "sample"), \(x) {x - `(80,100]`}))
+  mutate(across(-c("lex_cat", "language", "sample"), \(x) {x - `(80,100]`}))
 
 ca_permuted_areas_diff <- ca_permuted_areas_wide |> 
-  pivot_longer(cols = -c("lex_class", "language", "sample"), 
+  pivot_longer(cols = -c("lex_cat", "language", "sample"), 
                names_to = "comparison", 
                values_to = "area_diff")
 ```
@@ -1051,10 +1599,10 @@ ca_permuted_areas_diff <- ca_permuted_areas_wide |>
 ```{r}
 ca_perm_test <- ca_permuted_areas_diff |> 
   left_join(ca_observed_areas_diff, 
-            by = c("language", "lex_class", "comparison"),
+            by = c("language", "lex_cat", "comparison"),
             suffix = c("_perm", "_obs")) |> 
   mutate(obs_beats_perm = abs(area_diff_perm) - abs(area_diff_obs) > 0) |> 
-  group_by(language, lex_class, comparison) |> 
+  group_by(language, lex_cat, comparison) |> 
   summarise(obs_p = sum(obs_beats_perm, na.rm = TRUE) / n(),
             .groups = "drop") |> 
   filter(comparison != "(80,100]") |> 

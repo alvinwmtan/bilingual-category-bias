@@ -20,7 +20,7 @@ sample_areas <- function(vocab_data, nboot = 10000, verbose = FALSE,
     select(all_of(setdiff(colnames(vocab_data), 
                           c("produces", "understands", "n")))) |> 
     # pivot wider to sample participants, not administrations
-    pivot_wider(names_from = c(language, lex_class),
+    pivot_wider(names_from = c(language, lex_cat),
                 values_from = c(prop_class, prop_total))
   
   sample_area <- function(i) {
@@ -36,14 +36,14 @@ sample_areas <- function(vocab_data, nboot = 10000, verbose = FALSE,
     areas_sampled <- vocab_sampled |> 
       # pivoting back requires a bit more finesse because of the data structure
       pivot_longer(cols = starts_with("prop_"),
-                   names_to = c("prop_type", "language", "lex_class"),
+                   names_to = c("prop_type", "language", "lex_cat"),
                    names_pattern = "(prop_[a-z]*)_([A-Z][a-z]*)_([a-z_]*)") |> 
       pivot_wider(names_from = prop_type,
                   values_from = value,
                   values_fn = unique) |> 
       filter(!is.na(prop_total)) |> 
-      group_by(language, lang_group, lex_class) |> 
-      nest(data = -c("language", "lang_group", "lex_class")) |> 
+      group_by(language, lang_group, lex_cat) |> 
+      nest(data = -c("language", "lang_group", "lex_cat")) |> 
       mutate(area = map_dbl(data, poly_area),
              sample = i) |> 
       select(-data) |> 
