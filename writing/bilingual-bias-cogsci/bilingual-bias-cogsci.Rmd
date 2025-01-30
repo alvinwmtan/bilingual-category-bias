@@ -72,7 +72,7 @@ Additionally, @chaiExtralinguisticModulationEnglish2021 has shown that bilingual
 Different levels of language exposure have also been shown to affect noun bias sizes in Basque--Spanish bilingual children [@barnesVocabularyGrowthComposition2013].
 Together, these results suggest that linguistic (and cross-linguistic) factors must play a role in explaining the noun bias, since variation across languages persists even when cognition and context are controlled for.
 
-[^0]: Note that contextual factors will be constant within a bilingual child, but may be different than monolinguals in the same country.
+[^0]: Note that contextual factors may be constant within a bilingual child, but may be different than monolinguals in the same country.
 
 Studies of the noun bias vary widely in how they analyse their data, which could also explain variation in their results.
 Some studies used direct counts of the number of nouns or verbs known by a child [e.g., <!--@goldfieldNounsVerbsComprehension2000; -->@leveyFirstWordsProduced2003; <!--@lucasExploringNounBias2008; -->@ozcanEarlyLexicalComposition2016;<!-- @xinNounVerbBias2010;--> @tardifCaregiverSpeechChildrens1997].
@@ -151,7 +151,7 @@ knitr::include_graphics("figs/demogs.png", error = FALSE)
 ```
 
 We obtained CDI data from Wordbank [@frankWordbankOpenRepository2017], an open repository of CDI data including a few bilingual datasets.
-These datasets contained vocabulary data for each child and demographic information (e.g., age and sex).
+These datasets contained vocabulary data and demographic information (e.g., age and sex) for each child.
 Each dataset also included language exposure values, standardised as percentages of exposure to each language.
 An overview of participant demographics for all analyses can be found at [osf.io/s5mwf](https://osf.io/s5mwf?view_only=a6e76ebe23b6422d8e1f90c1093da9db)<!--is shown in Figure \ref{fig:demogs}-->.
 We focused on production data for all analyses. 
