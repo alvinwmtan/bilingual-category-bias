@@ -135,7 +135,7 @@ In the present study, we test these hypotheses through a set of three analyses o
 
 # Methods
 In this section, we describe the broad methodological approach for all three analyses, leaving analysis-specific details to the subsequent sections.
-All code is available at [REDACTED].
+All code is available at [osf.io/8rdwh](https://osf.io/8rdwh/?view_only=a6e76ebe23b6422d8e1f90c1093da9db).
 
 ## Vocabulary data
 ```{r demogs, eval=F}
@@ -153,7 +153,7 @@ knitr::include_graphics("figs/demogs.png", error = FALSE)
 We obtained CDI data from Wordbank [@frankWordbankOpenRepository2017], an open repository of CDI data including a few bilingual datasets.
 These datasets contained vocabulary data for each child and demographic information (e.g., age and sex).
 Each dataset also included language exposure values, standardised as percentages of exposure to each language.
-An overview of participant demographics for all analyses can be found at [https://osf.io/s5mwf](https://osf.io/s5mwf?view_only=a6e76ebe23b6422d8e1f90c1093da9db)<!--is shown in Figure \ref{fig:demogs}-->.
+An overview of participant demographics for all analyses can be found at [osf.io/s5mwf](https://osf.io/s5mwf?view_only=a6e76ebe23b6422d8e1f90c1093da9db)<!--is shown in Figure \ref{fig:demogs}-->.
 We focused on production data for all analyses. 
 <!--The data were retrieved using the `wordbankr` package [@braginskyWordbankrAccessingWordbank2022].-->
 
@@ -658,6 +658,7 @@ ox_bias_eng <- make_bias_plot(ox_bias_data |> filter(language == "English"),
   scale_color_brewer(type = "qual", palette = "Set2") +
   scale_shape_manual(values = c(15, 16), 
                      guide = guide_legend(reverse = TRUE)) +
+  coord_cartesian(xlim = c(-0.15, 0.075)) +
   theme(strip.background = element_blank(),
         strip.text = element_blank())
 ox_bias_oth <- make_bias_plot(ox_bias_data |> filter(language != "English"),
@@ -665,6 +666,7 @@ ox_bias_oth <- make_bias_plot(ox_bias_data |> filter(language != "English"),
   scale_color_brewer(type = "qual", palette = "Set2") +
   scale_shape_manual(values = c(15, 16), 
                      guide = guide_legend(reverse = TRUE)) +
+  coord_cartesian(xlim = c(-0.15, 0.075)) +
   theme(legend.position = "none")
 
 ox_bias_twocol <- (ox_bias_eng | ox_bias_oth) + 
@@ -777,9 +779,8 @@ Only one comparison survived the correction for multiple comparisons: function w
 Three other comparisons were significant prior to correction but did not survive the correction: function words ($p$ = `r ox_perm_test_full |> filter(language == "Spanish", lex_cat == "function_words") |> pull(obs_p_adj) |> papaja::apa_p()`) and nouns ($p$ = `r ox_perm_test_full |> filter(language == "Spanish", lex_cat == "nouns") |> pull(obs_p_adj) |> papaja::apa_p()`) in Spanish for children from the UK vs Spain, and nouns in German for children from the UK vs Germany ($p$ = `r ox_perm_test_full |> filter(language == "German", lex_cat == "nouns") |> pull(obs_p_adj) |> papaja::apa_p()`).
 The full pre-matched dataset also had two significant comparisons that were not significant after matching: function words and nouns in Spanish for children from the UK vs Spain.
 
-As hypothesised, we found an effect of environmental context, such that children acquiring English and German exhibited different function word biases depending on whether they were growing up in the UK or in Germany; this finding supports H3 (contextual factors).
-The lack of an effect for any other comparison may again be due to a lack of power, as is evidenced by the somewhat large confidence intervals. 
-A larger sample may be able to provide narrower confidence intervals, and uncover smaller effects that the current sample cannot.
+As hypothesised, we found an effect of environmental context, such that children acquiring English and German exhibited different function word biases depending on whether they were growing up in the UK or in Germany, supporting H3 (contextual factors).
+The lack of other significant comparisons may again be due to a lack of power; a larger sample may be able to uncover smaller effects that the current sample cannot.
 It may also be the case that the effect depends on the specific language combination, such that there is an interaction between the linguistic and contextual factors on category bias variation.
 
 # General discussion
@@ -791,13 +792,13 @@ This finding also provides an imperative for language acquisition researchers to
 Our results also suggested that factors affecting category biases were not uniform across language combinations (Analyses 1 and 3).
 This observation is perhaps unsurprising---since some language pairs have very similar category bias sizes even for monolinguals, any cross-linguistic influence would not be apparent, whereas other language pairs have very divergent bias sizes, permitting the observation of cross-linguistic influence. 
 This result also emphasises the importance of surveying a broader set of language combinations in bilingualism research, since some true effects may not be elicitable in particular language pairs. 
-For example, if English and French have similarly sized syntactic category biases, the influence of one language on the other would not be detectable.
+<!-- For example, if English and French have similarly sized syntactic category biases, the influence of one language on the other would not be detectable. -->
 A majority of bilingualism research has focused on bilinguals acquiring English and another language (including the present work!), which does not comprehensively cover the possible relationships between a bilingual's two languages; a much broader scope of investigation would be necessary to understand the generalisability of various effects related to bilingualism.
 
-Methodologically, the analytic method employed in the present work provided a means to directly investigate the over- or under-representation of syntactic categories in children's early vocabularies.
+Methodologically, the analytic method used in this work provided a means to directly investigate the over- or under-representation of syntactic categories in children's early vocabularies.
 <!-- This method allowed for a measurement that has a closer link with the construct of interest---that is, whether particular syntactic categories are privileged in children's word learning processes---since the number of potentially learnable words is controlled for. -->
 However, this approach also required non-parametric statistics, since the bias sizes must be estimated from whole samples (rather than individual children); this requirement in turn meant that we had to control for covariates via matching (instead of direct modelling).
-As matching is typically constrained by the subgroup with the smallest size, our approach may have limited the power of our analyses, as indeed was suggested by the large confidence intervals obtained.
+As matching is typically constrained by the subgroup with the smallest size, our approach may have limited the power of our analyses.
 Future work should involve larger sample sizes in order to improve the ability of such analyses to detect true effects, although we acknowledge that the task of collecting data from young bilinguals is often difficult as population sizes tend to be smaller than other potential populations of interest.
 
 Nonetheless, the current set of analyses represent an attempt at disentangling potential factors contributing to differential learning of words in young children, providing evidence that linguistic and contextual factors are both important to consider in language acquisition.
@@ -806,7 +807,7 @@ Notably, language acquisition research on monolinguals is much more common than 
 In fact, studying bilinguals may afford approaches that are not possible with monolinguals, as evidenced by the present work.
 We anticipate that an increasing emphasis on understudied language settings, combined with increasing statistical sophistication and increasing open science practices, will serve to improve the generalisability, accuracy, and rigour of our theories of language acquisition.
 
-\newpage
+\pagebreak
 # Acknowledgements
 We would like to thank the data contributors of Wordbank, whose efforts towards open science have made this research possible.
 
